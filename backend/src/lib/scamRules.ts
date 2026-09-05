@@ -46,7 +46,7 @@ const SCAM_RULES: ScamRule[] = [
     // Asking for a one-time code is near-always malicious: no legitimate
     // organization will ever need you to READ a code back to them.
     reason: 'otp_code_request',
-    weight: 30,
+    weight: 35,
     patterns: [
       /\bone[- ]time (code|password|pin)\b/,
       /\bverification code\b/,
@@ -54,6 +54,35 @@ const SCAM_RULES: ScamRule[] = [
       /\bcode (that was |was )?(just )?(sent|texted) to (your|the) phone\b/,
       /\bconfirm the code\b|\bread (me |back )?the code\b/,
       /\bsix[- ]digit code\b/,
+      /\bthe code (we|i|that) (just )?sent\b/,
+      /\bcode (on your phone|in (your |the )?text)\b/,
+    ],
+  },
+  {
+    // Asking for raw card data — CVV, full card number, PIN, expiration —
+    // is the #1 bank-impostor pattern. No legitimate bank or merchant ever
+    // asks the cardholder to READ these back over the phone. Very strong
+    // signal on its own.
+    reason: 'card_data_request',
+    weight: 45,
+    patterns: [
+      // CVV (allow punctuation/whitespace: C.V.V., CVV, cvv2).
+      /\bc(\s*\.\s*)?v(\s*\.\s*)?v(\s*2)?\b/i,
+      /\bcard\s*security\s*code\b/,
+      /\bsecurity\s*code (on|at the back|from) (the |your )?card\b/,
+      /\bthree[- ]digit (code|number)\b/,
+      /\b(back|rear) of (the |your )?card\b/,
+      /\bcard verification\b/,
+      // Full card-number readback.
+      /\bread (me |back )?(the )?(full )?card( number)?\b/,
+      /\b(card|account|credit) (number|num)\b/,
+      // PIN readback.
+      /\b(read|give|tell) (me |us )?(your )?pin\b/,
+      /\byour (debit|atm) pin\b/,
+      // Expiration.
+      /\bexpir(a|tion|y) (date|month|year|on the card)\b/,
+      // Cardholder name + DOB combo.
+      /\bcardholder('?s)? name\b/,
     ],
   },
   {
@@ -93,16 +122,22 @@ const SCAM_RULES: ScamRule[] = [
       /\bofficer\b|\bdetective\b/,
       /\bcustoms (officer|department)\b/,
       /\bdrug (charges|cartel)\b/,
+      // Common bank / fraud-department framings.
+      /\b(fraud|bank|security) (department|team|division|officer)\b/,
+      /\bthis is (your|the) bank\b/,
+      /\bcalling from (your|the) bank\b/,
     ],
   },
   {
     reason: 'secrecy_pressure',
     weight: 20,
     patterns: [
-      /\bdo(n'| no)t tell (anyone|mom|dad|your (mom|dad|parents)|the police)\b/,
+      /\bdo(n'| no)t tell (anyone|mom|dad|your (mom|dad|parents)|the police|your family)\b/,
       /\bkeep this between (us|you and me)\b/,
       /\bnot supposed to tell\b/,
       /\bthis call is confidential\b/,
+      /\bdon'?t (mention|talk to|share)\b/,
+      /\bconfidential investigation\b/,
     ],
   },
   {
@@ -117,19 +152,22 @@ const SCAM_RULES: ScamRule[] = [
       /\bdo(n'| no)t hang up\b/,
       /\btoday only\b/,
       /\bact now\b/,
+      /\bto (protect|secure|verify) (your|the) (funds|account)\b/,
     ],
   },
   {
     reason: 'account_compromise',
-    weight: 15,
+    weight: 20,
     patterns: [
-      /\baccount (is |has been )?(suspended|locked|frozen)\b/,
-      /\bunusual (activity|transactions)\b/,
+      /\baccount (is |has been )?(suspended|locked|frozen|compromised)\b/,
+      /\bunusual (activity|transactions?)\b/,
       /\bverify your (account|identity|ssn)\b/,
       /\byour ssn\b|\bsocial security number has\b/,
       /\bunauthorized (transaction|login|access)\b/,
       /\bdetected unusual activity\b/,
       /\bwe detected .* on your account\b/,
+      /\bsuspicious activity\b/,
+      /\bunauthorized (purchase|charge|withdrawal)\b/,
     ],
   },
   {

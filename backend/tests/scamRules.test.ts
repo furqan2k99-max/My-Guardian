@@ -58,4 +58,49 @@ describe('scamRules — new signals', () => {
     expect(s.risk_reasons).toContain('payment_gift_card');
     expect(s.risk_reasons).toContain('authority_impersonation');
   });
+
+  it('flags explicit CVV readback requests as high-risk on their own', () => {
+    const t =
+      "Hi this is your bank fraud department. We need to verify your account. " +
+      "Please read me the three digit C.V.V. from the back of your card.";
+    const s = scoreTranscript(t);
+    expect(s.risk_reasons).toContain('card_data_request');
+    expect(s.risk_reasons).toContain('authority_impersonation');
+    expect(s.risk_reasons).toContain('urgency_pressure');
+    expect(s.risk_reasons).toContain('account_compromise');
+    expect(s.risk_score).toBeGreaterThanOrEqual(75);
+  });
+
+  it('flags short "send me your cvv" requests (no other signals)', () => {
+    const t = "Ma'am, send me your cvv so I can confirm this is your card.";
+    const s = scoreTranscript(t);
+    expect(s.risk_reasons).toContain('card_data_request');
+    expect(s.risk_score).toBeGreaterThanOrEqual(45);
+  });
+
+  it('flags PIN readback requests', () => {
+    const t = 'Tell me your debit pin so I can unlock your account from our end.';
+    const s = scoreTranscript(t);
+    expect(s.risk_reasons).toContain('card_data_request');
+    expect(s.risk_score).toBeGreaterThanOrEqual(45);
+  });
+
+  it('flags full card-number readback requests', () => {
+    const t =
+      'Sir, for verification please read me the full card number and the ' +
+      'security code on the back.';
+    const s = scoreTranscript(t);
+    expect(s.risk_reasons).toContain('card_data_request');
+    expect(s.risk_score).toBeGreaterThanOrEqual(45);
+  });
+
+  it('does not false-positive on a routine doctor appointment reminder', () => {
+    const t =
+      "Hello Mrs. Smith, this is Dr. Patel's office calling to remind you " +
+      'about your appointment tomorrow at 2pm. Please bring your insurance card.';
+    const s = scoreTranscript(t);
+    expect(s.risk_score).toBeLessThanOrEqual(20);
+    expect(s.risk_reasons).not.toContain('card_data_request');
+    expect(s.risk_reasons).not.toContain('otp_code_request');
+  });
 });
