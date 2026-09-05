@@ -11,6 +11,13 @@ export interface ScamMatch {
 export interface AudioAnalysisResult {
   risk_score: number;
   risk_reasons: string[];
+  /**
+   * Negative-signal categories that fired. Surfaced in the result UI as
+   * "Routine context" so the user understands why a low-risk call is
+   * low-risk (e.g. the caller was asking for a wire transfer with normal
+   * account details).
+   */
+  supporting_reasons?: string[];
   matches: ScamMatch[];
   duration_seconds: number;
   transcript_chars: number;

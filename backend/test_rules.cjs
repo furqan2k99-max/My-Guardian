@@ -48,11 +48,21 @@ function req(method, path, body, token) {
       label: 'Benign: doctor appt',
       transcript: 'Hello Mrs. Smith, this is Dr. Patel\'s office calling to remind you about your appointment tomorrow at 2pm. Please bring your insurance card.',
     },
+    {
+      label: 'Legit: receive money (account + IFSC)',
+      transcript: 'Good morning, this is Ramesh from Acme Logistics. I am calling to confirm the bank transfer for your pending payment of fifty thousand rupees. Could you please confirm your beneficiary name, your account number, the IFSC code of your SBI branch, and the branch name? I will then remit the amount to your account today.',
+    },
+    {
+      label: 'CVV in payment context (should still flag)',
+      transcript: 'I am calling to send you a refund of fifteen thousand rupees. Please give me your account number and IFSC. Also, for verification, I need to read the three digit CVV from the back of your card.',
+    },
   ];
 
   for (const c of cases) {
     const r = await req('POST', '/api/v1/analyze-transcript', { transcript: c.transcript, source: 'phone_call' }, token);
     const reasons = r.body.risk_reasons ?? [];
-    console.log(`${c.label.padEnd(28)} score=${String(r.body.risk_score).padStart(3)} reasons=[${reasons.join(', ')}]`);
+    const supporting = r.body.supporting_reasons ?? [];
+    const supp = supporting.length > 0 ? ` supporting=[${supporting.join(', ')}]` : '';
+    console.log(`${c.label.padEnd(36)} score=${String(r.body.risk_score).padStart(3)} reasons=[${reasons.join(', ')}]${supp}`);
   }
 })();

@@ -103,4 +103,44 @@ describe('scamRules — new signals', () => {
     expect(s.risk_reasons).not.toContain('card_data_request');
     expect(s.risk_reasons).not.toContain('otp_code_request');
   });
+
+  it('does not flag a routine receiving-money request (account number, IFSC, etc.)', () => {
+    // Caller wants to wire money TO the elder. This is the canonical
+    // legitimate ask — beneficiary name, account number, IFSC, bank
+    // name, branch, amount. The script should score 0 (or very near 0)
+    // and the supporting_reasons should explain why.
+    const t =
+      'Good morning, this is Ramesh from Acme Logistics. I am calling to ' +
+      'confirm the bank transfer for your pending payment of fifty thousand ' +
+      'rupees. Could you please confirm your beneficiary name, your account ' +
+      'number, the IFSC code of your SBI branch, and the branch name? I will ' +
+      'then remit the amount to your account today.';
+    const s = scoreTranscript(t);
+    expect(s.risk_reasons).not.toContain('card_data_request');
+    expect(s.risk_reasons).not.toContain('otp_code_request');
+    expect(s.risk_reasons).not.toContain('account_compromise');
+    expect(s.supporting_reasons).toContain('legitimate_transfer_details');
+    // Should be very low — the only signal is authority impersonation
+    // ("Ramesh from Acme Logistics"), if any.
+    expect(s.risk_score).toBeLessThan(25);
+  });
+
+  it('still flags a CVV readback even in a payment context', () => {
+    // The script says "I need to send you money" first (legitimate
+    // framing) but then asks for the CVV. CVV + the legitimate framing
+    // should still be high risk — the legitimate framing is exactly
+    // the bank-impersonation trick the semantic layer warns about.
+    const t =
+      'I am calling to send you a refund of fifteen thousand rupees. Please ' +
+      'give me your account number and IFSC. Also, for verification, I need ' +
+      'to read the three digit CVV from the back of your card.';
+    const s = scoreTranscript(t);
+    expect(s.risk_reasons).toContain('card_data_request');
+    // The legitimate-field signal lives in supporting_reasons (it
+    // subtracts from the score, it is not itself a "risk reason").
+    expect(s.supporting_reasons).toContain('legitimate_transfer_details');
+    // CVV is 45; legitimate fields can subtract up to 40. Net should
+    // still be ≥ 30, i.e. flagged as suspicious, not safe.
+    expect(s.risk_score).toBeGreaterThanOrEqual(30);
+  });
 });

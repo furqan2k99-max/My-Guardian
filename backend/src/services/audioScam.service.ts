@@ -67,6 +67,12 @@ export interface AnalyzedAudio {
   risk_score: number;
   risk_reasons: string[];
   matches: { reason: string; excerpt: string }[];
+  /**
+   * Negative-signal categories that fired (e.g. the caller asked for
+   * legitimate receiving-money details). Surfaced in the result UI as
+   * "Routine context" so the user can see WHY a low-risk call is low-risk.
+   */
+  supporting_reasons: string[];
   duration_seconds: number;
   transcript_chars: number;
 }
@@ -94,6 +100,7 @@ export async function analyzeAudioBuffer(
     return {
       risk_score: 0,
       risk_reasons: [],
+      supporting_reasons: [],
       matches: [],
       duration_seconds: Math.round(durationSeconds * 10) / 10,
       transcript_chars: transcript.length,
@@ -104,6 +111,7 @@ export async function analyzeAudioBuffer(
   return {
     risk_score: score.risk_score,
     risk_reasons: score.risk_reasons,
+    supporting_reasons: score.supporting_reasons,
     matches: score.matches,
     duration_seconds: Math.round(durationSeconds * 10) / 10,
     transcript_chars: transcript.length,

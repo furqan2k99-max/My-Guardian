@@ -22,6 +22,12 @@ export interface ScamMatch {
 export interface ScamScore {
   risk_score: number;
   risk_reasons: string[];
+  /**
+   * Negative-signal rules that fired (e.g. "legitimate_transfer_details").
+   * They reduce the score instead of adding to it. Surfaced for transparency
+   * to the user; they are NOT reasons the call is suspicious.
+   */
+  supporting_reasons: string[];
   matches: ScamMatch[];
 }
 
@@ -63,6 +69,12 @@ const SCAM_RULES: ScamRule[] = [
     // is the #1 bank-impostor pattern. No legitimate bank or merchant ever
     // asks the cardholder to READ these back over the phone. Very strong
     // signal on its own.
+    //
+    // NOTE: "account number" alone is intentionally NOT here — bank account
+    // numbers (for receiving a wire/transfer) are a legitimate ask. The
+    // disambiguator is whether it's "CARD number" / "credit card number"
+    // vs. "account number / A/C number" (the latter is the ledger account
+    // a transfer would land in, not the card on the front of your wallet).
     reason: 'card_data_request',
     weight: 45,
     patterns: [
@@ -73,16 +85,55 @@ const SCAM_RULES: ScamRule[] = [
       /\bthree[- ]digit (code|number)\b/,
       /\b(back|rear) of (the |your )?card\b/,
       /\bcard verification\b/,
-      // Full card-number readback.
-      /\bread (me |back )?(the )?(full )?card( number)?\b/,
-      /\b(card|account|credit) (number|num)\b/,
+      // CARD-number readback (not "account number").
+      /\b(read|give|tell) (me |us )?(the |your )?(full )?(credit|debit|atm|bank|plastic)? ?card( number)?\b/,
+      /\b(credit|debit|atm|bank) card( number)?\b/,
       // PIN readback.
       /\b(read|give|tell) (me |us )?(your )?pin\b/,
-      /\byour (debit|atm) pin\b/,
-      // Expiration.
+      /\b(card |debit |atm |credit )?pin (code|number)?\b/,
+      // Expiration / CVV-on-front.
       /\bexpir(a|tion|y) (date|month|year|on the card)\b/,
-      // Cardholder name + DOB combo.
+      // Cardholder name readback (the name ON the card, not the account holder).
       /\bcardholder('?s)? name\b/,
+      // "Read the front of your card" / "numbers on the front".
+      /\bnumbers? on the (front|back) of (the |your )?card\b/,
+      /\b(read|tell) (me |us )?what('?s)? on (the |your )?card\b/,
+    ],
+  },
+  {
+    // Legitimate receiving-money asks (bank account details for a transfer
+    // TO the elder) are a NEGATIVE signal — they argue the caller is
+    // routing a real payment and reduce the overall risk score.
+    //
+    // Weight is intentionally modest (-10) so a single strong scam
+    // signal (CVV readback, OTP request, etc.) still dominates and
+    // scores >= 30 (flagged as suspicious). For a pure payment script
+    // this is enough to drop the score to 0 (clean).
+    //
+    // Domain knowledge: account number, IFSC, bank name, branch,
+    // beneficiary name, and amount are the standard fields a payer
+    // needs to wire money to an Indian bank account. Asking for them
+    // in a routine payment context is exactly what a legitimate caller
+    // does.
+    reason: 'legitimate_transfer_details',
+    weight: -10,
+    patterns: [
+      // Bank routing identifiers.
+      /\bifsc(\s*code)?\b/,
+      /\bswift(\s*code)?\b/,
+      /\brouting (number|code)\b/,
+      /\b(sort code|aba)\b/,
+      // Account identifiers (not card identifiers).
+      /\b(account|a\/c|beneficiary) (number|no|num)\b/,
+      /\bbeneficiary name\b/,
+      // "Transfer / deposit / payment" context.
+      /\b(transfer|wire|deposit|remit)(ing)? (money|funds|payment|the amount)\b/,
+      /\b(wire|transfer|remit) to (your|your|the) (account|bank)\b/,
+      /\bsend (the |you )?(money|amount|payment|funds)\b/,
+      // Indian-context bank names.
+      /\b(sbi|hdfc|icici|axis|kotak|pnb|bank of baroda|canara|union bank|indian bank)\b/,
+      // Branch.
+      /\bbranch (name|code|location)?\b/,
     ],
   },
   {
@@ -224,6 +275,7 @@ export function scoreTranscript(rawTranscript: string): ScamScore {
 
   const reasons: string[] = [];
   const matches: ScamMatch[] = [];
+  const supportingReasons: string[] = [];
   let total = 0;
 
   for (const rule of SCAM_RULES) {
@@ -239,6 +291,22 @@ export function scoreTranscript(rawTranscript: string): ScamScore {
 
     if (!excerpt) continue;
 
+    if (rule.weight < 0) {
+      // Negative-weight rules are *supporting evidence* — they push the
+      // score down but shouldn't be presented to the user as a "risk
+      // reason" because the caller asked for something legitimate.
+      supportingReasons.push(rule.reason);
+      total += rule.weight;
+      // Multi-hit bonus applies to legitimate fields too — a single
+      // "account number" alone is a small signal, but mentioning the
+      // account number + IFSC + amount + branch all in one call is a
+      // strong "this is a real transfer" signal.
+      if (hitsThisCategory >= ESCALATION_THRESHOLD) {
+        total += ESCALATION_BONUS;
+      }
+      continue;
+    }
+
     reasons.push(rule.reason);
     matches.push({ reason: rule.reason, excerpt });
     total += rule.weight;
@@ -252,8 +320,9 @@ export function scoreTranscript(rawTranscript: string): ScamScore {
   total = applyMultiSignalBonus(reasons.length, total);
 
   return {
-    risk_score: Math.min(100, Math.round(total)),
+    risk_score: Math.max(0, Math.min(100, Math.round(total))),
     risk_reasons: reasons,
     matches,
+    supporting_reasons: supportingReasons,
   };
 }

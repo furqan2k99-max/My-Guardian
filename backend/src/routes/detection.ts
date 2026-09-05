@@ -140,6 +140,7 @@ detectionRouter.post(
           upgraded: false,
           method: 'rules_only',
           risk_reasons: ruleScore.risk_reasons,
+          supporting_reasons: ruleScore.supporting_reasons,
         });
         return;
       }
@@ -165,6 +166,7 @@ detectionRouter.post(
         upgraded: false,
         method: 'rules_pending_semantic',
         risk_reasons: ruleScore.risk_reasons,
+        supporting_reasons: ruleScore.supporting_reasons,
         transcript: transcript,
       });
     } catch (err) {

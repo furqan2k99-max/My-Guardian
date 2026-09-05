@@ -22,12 +22,12 @@ import { colors, radii, shadows, spacing, type, riskTier } from '../theme';
 
 const DEMO_DESCRIPTION =
   'Try the analysis engine: record a sample conversation and the rules-based ' +
-  'scorer will rate it instantly. Audio is analyzed and discarded — never stored.';
+  'scorer will rate it instantly. Audio is analyzed and discarded ï¿½ never stored.';
 
 /**
  * Forward-looking demo of the scam-analysis engine: record a sample
  * conversation and see how the rule-based scorer would rate it. Deliberately
- * presented as experimental — not part of the core guardian flow.
+ * presented as experimental ï¿½ not part of the core guardian flow.
  */
 export function VoiceScamCheckerScreen() {
   const { token, signOut } = useAuth();
@@ -106,7 +106,7 @@ export function VoiceScamCheckerScreen() {
         hitSlop={8}
         style={({ pressed }) => [styles.back, pressed && { opacity: 0.6 }]}
       >
-        <Text style={styles.backText}>‹  Back</Text>
+        <Text style={styles.backText}>ï¿½  Back</Text>
       </Pressable>
 
       <View style={styles.titleBlock}>
@@ -137,7 +137,7 @@ export function VoiceScamCheckerScreen() {
             </View>
             <Text style={styles.recorderStatus}>
               {isRecording
-                ? `Recording  ·  ${Math.round(recorderState.durationMillis / 1000)}s`
+                ? `Recording  ï¿½  ${Math.round(recorderState.durationMillis / 1000)}s`
                 : recorded
                   ? 'Recording captured'
                   : 'Ready to listen'}
@@ -183,7 +183,7 @@ export function VoiceScamCheckerScreen() {
             <View style={styles.analyzingTint} />
             <View style={styles.analyzingRow}>
               <ActivityIndicator color={colors.accent} />
-              <Text style={styles.analyzingText}>Analyzing your recording…</Text>
+              <Text style={styles.analyzingText}>Analyzing your recordingï¿½</Text>
             </View>
           </View>
         )}
@@ -263,7 +263,7 @@ function ResultCard({ result }: { result: AudioAnalysisResult }) {
               {result.matches.length > 0 && (
                 <View style={styles.matchBox}>
                   <Text style={styles.matchKicker}>MATCHED PHRASE</Text>
-                  <Text style={styles.matchText}>“{result.matches[0].excerpt}”</Text>
+                  <Text style={styles.matchText}>ï¿½{result.matches[0].excerpt}ï¿½</Text>
                 </View>
               )}
             </View>
@@ -273,9 +273,20 @@ function ResultCard({ result }: { result: AudioAnalysisResult }) {
             </View>
           )}
 
+          
+          {result.supporting_reasons && result.supporting_reasons.length > 0 && (
+            <View style={styles.routineBlock}>
+              <Text style={styles.routineKicker}>ROUTINE CONTEXT</Text>
+              <Text style={styles.routineText}>
+                The caller asked for {result.supporting_reasons.map(formatRiskReason).join(', ').toLowerCase()} â€”
+                these are normal details for a legitimate payment to you, which is why the
+                score dropped.
+              </Text>
+            </View>
+          )}
           <View style={styles.resultFooter}>
             <Text style={styles.resultFooterText}>
-              Analyzed {Math.round(result.duration_seconds)}s · nothing was stored
+              Analyzed {Math.round(result.duration_seconds)}s ï¿½ nothing was stored
             </Text>
           </View>
         </View>
@@ -399,6 +410,10 @@ const styles = StyleSheet.create({
 
   cleanBlock: { marginTop: spacing.md, padding: spacing.md, backgroundColor: 'rgba(21,128,61,0.08)', borderRadius: radii.md },
   cleanTitle: { ...type.body, color: colors.low, fontWeight: '600' },
+
+  routineBlock: { marginTop: spacing.md, padding: spacing.md, backgroundColor: 'rgba(29,78,216,0.06)', borderRadius: radii.md, borderWidth: 1, borderColor: 'rgba(29,78,216,0.18)' },
+  routineKicker: { ...type.micro, color: colors.accentInk, marginBottom: 4 },
+  routineText: { ...type.body, color: colors.text, lineHeight: 22 },
 
   resultFooter: {
     paddingTop: spacing.sm,
