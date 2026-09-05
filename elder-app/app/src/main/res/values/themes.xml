@@ -1,0 +1,7 @@
+<resources>
+    <!-- Platform theme: no ActionBar (Compose draws its own UI). -->
+    <style name="Theme.MyGuardian" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/white</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

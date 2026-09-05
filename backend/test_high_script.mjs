@@ -1,0 +1,3 @@
+// HIGH-scoring script for semantic layer test
+// Designed to cross the risk_score >= 70 threshold with clear manipulation patterns
+const script = "This is your bank's fraud department. We detected suspicious activity on your account. To protect your funds, please read the three-digit CVV from the back of your card and tell it to me. Do not tell anyone in your family about this call, as we are conducting a confidential investigation.";

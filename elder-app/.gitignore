@@ -1,0 +1,18 @@
+# Gradle
+.gradle/
+build/
+/app/build/
+captures/
+local.properties
+
+# IDE
+.idea/
+*.iml
+.kotlin/
+
+# OS
+.DS_Store
+
+# Exported bundles
+*.apk
+*.aab

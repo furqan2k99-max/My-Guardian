@@ -1,0 +1,137 @@
+// MyGuardian backend schema (PLAN.md section 3 — data model)
+// users + family_links (foundation) plus detection tables:
+// flagged_events + reputation_cache (Phase 1: text/email scanning).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  elder
+  guardian
+}
+
+enum FamilyLinkStatus {
+  pending
+  active
+}
+
+enum EventType {
+  call
+  sms
+  email
+  link
+}
+
+enum ElderAction {
+  dismissed
+  blocked
+  no_action
+}
+
+enum GuardianAction {
+  reviewed
+  dismissed
+}
+
+enum ReputationIdentifierType {
+  number
+  url
+}
+
+model User {
+  id               String         @id @default(cuid())
+  role             Role
+  phone_number_hash String
+  created_at       DateTime       @default(now())
+
+  elderLinks       FamilyLink[]   @relation("ElderFamilyLinks")
+  guardianLinks    FamilyLink[]   @relation("GuardianFamilyLinks")
+  flaggedEvents    FlaggedEvent[] @relation("ElderEvents")
+  guardianInvites  FamilyLinkInvite[] @relation("GuardianInvites")
+  deviceTokens     DeviceToken[]      @relation("DeviceTokens")
+
+  @@map("users")
+  @@index([role])
+  @@index([phone_number_hash])
+}
+
+model FamilyLink {
+  id               String           @id @default(cuid())
+  elder_user_id    String
+  guardian_user_id String
+  status           FamilyLinkStatus @default(pending)
+  created_at       DateTime         @default(now())
+
+  elder_user       User             @relation("ElderFamilyLinks", fields: [elder_user_id], references: [id], onDelete: Cascade)
+  guardian_user    User             @relation("GuardianFamilyLinks", fields: [guardian_user_id], references: [id], onDelete: Cascade)
+
+  @@map("family_links")
+  @@index([elder_user_id])
+  @@index([guardian_user_id])
+  @@index([status])
+}
+
+model FamilyLinkInvite {
+  code             String   @id
+  guardian_user_id String
+  expires_at       DateTime
+  created_at       DateTime @default(now())
+
+  guardian_user    User     @relation("GuardianInvites", fields: [guardian_user_id], references: [id], onDelete: Cascade)
+
+  @@map("family_link_invites")
+  @@index([guardian_user_id])
+  @@index([expires_at])
+}
+
+model DeviceToken {
+  id         String   @id @default(cuid())
+  user_id    String
+  platform   String
+  token      String   @unique
+  created_at DateTime @default(now())
+
+  user       User     @relation("DeviceTokens", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("device_tokens")
+  @@index([user_id])
+}
+
+model FlaggedEvent {
+  id                  String     @id @default(cuid())
+  elder_user_id       String
+  event_type          EventType
+  sender_hash         String
+  risk_score          Float?
+  risk_reasons        String[]   @default([])
+  created_at            DateTime   @default(now())
+  guardian_notified_at  DateTime?
+  elder_action          ElderAction @default(no_action)
+  guardian_action       GuardianAction?
+  guardian_reviewed_at  DateTime?
+
+  elder_user          User       @relation("ElderEvents", fields: [elder_user_id], references: [id], onDelete: Cascade)
+
+  @@map("flagged_events")
+  @@index([elder_user_id])
+  @@index([guardian_notified_at])
+}
+
+model ReputationCache {
+  id              String                  @id @default(cuid())
+  identifier_hash String                  @unique
+  identifier_type ReputationIdentifierType
+  score           Float?
+  source          String
+  cached_at       DateTime                @default(now())
+  ttl             Int
+
+  @@map("reputation_cache")
+  @@index([identifier_type])
+}

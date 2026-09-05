@@ -1,0 +1,74 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      CALL_PHONE is requested at runtime on the permissions screen — required
+      for the CallScreeningService. READ_SMS / RECEIVE_SMS and the SMS
+      receiver below are DORMANT reference only (a possible future SMS
+      milestone would need the default-SMS-app role; they are never
+      requested at runtime now). POST_NOTIFICATIONS is for future safety
+      alerts and is not requested yet.
+    -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MyGuardian"
+        android:networkSecurityConfig="@xml/network_security_config">
+        <!--
+          Cleartext is locked down via network_security_config: permitted only
+          to the emulator's host loopback for the local dev backend. Production
+          must serve the API over HTTPS.
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Share-sheet target: "Check link with MyGuardian" from any app
+                 that shares plain text containing a URL. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          DORMANT reference for a possible future SMS milestone (would require
+          the default-SMS-app role to actually receive broadcasts). Not
+          requested at runtime and never fires in this version.
+        -->
+        <receiver
+            android:name=".sms.SmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED_ACTION" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          Phase B call detection: CallScreeningService logs incoming call
+          numbers + state. Requires CALL_PHONE (runtime, not the default-dialer
+          role). Always allows the call through — scoring/flagging come later.
+        -->
+        <service
+            android:name=".call.CallScreenService"
+            android:exported="true"
+            android:permission="android.permission.BIND_SCREENING_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.CallScreeningService" />
+            </intent-filter>
+        </service>
+    </application>
+
+</manifest>

@@ -1,0 +1,30 @@
+node_modules/
+dist/
+.expo/
+*.log
+.env
+.env.local
+android/app/build/
+ios/Pods/
+ios/build/
+*.apk
+*.aab
+*.hprof
+coverage/
+.turbo/
+.hfcache/
+.model-cache/
+
+# Screenshots
+guardian_screen*.png
+check*.png
+check_devlogin.png
+
+# Firebase service account
+backend/myguardian-1aa01-firebase-adminsdk-fbsvc-f4fcfc5b93.json
+backend/debug_output.txt
+*.keystore
+*.jks
+
+# Claude
+guardian-app/.claude/

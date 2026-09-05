@@ -1,0 +1,456 @@
+openapi: 3.0.3
+info:
+  title: MyGuardian API
+  version: 0.2.0
+  description: |
+    Shared backend for the MyGuardian two-app system (elder Android app + guardian app).
+    Contract for the mobile clients.
+
+    AUTH NOTE: `POST /auth/dev-login` is a LOCAL-DEV stand-in. Production will verify
+    a provider identity token (Firebase Auth / Auth0 / OAuth) and map it onto a `users`
+    row. Mobile clients must use ONLY the prod flow; dev-login is disabled when
+    NODE_ENV=production.
+
+    PRIVACY: no raw phone numbers, message text, audio, or call transcripts — only
+    hashed identifiers + reason tags (PLAN.md section 3 key principle).
+
+    VERSIONING: business API is mounted under `/api/v1`. Ops endpoints (`/health`,
+    `/health/ready`) are unversioned.
+servers:
+  - url: http://localhost:4000
+    description: Local development
+
+paths:
+  /health:
+    get:
+      summary: Liveness check
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+
+  /health/ready:
+    get:
+      summary: Readiness check (verifies database connectivity)
+      operationId: getReadiness
+      security: []
+      responses:
+        "200":
+          description: Database reachable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+        "503":
+          description: Database unreachable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [unavailable]
+
+  /api/v1/auth/dev-login:
+    post:
+      summary: Dev-only login (stand-in for OAuth provider verification)
+      operationId: devLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role, phone_number_hash]
+              properties:
+                role:
+                  type: string
+                  enum: [elder, guardian]
+                phone_number_hash:
+                  type: string
+                  minLength: 8
+                  description: Hash (e.g. SHA-256) of the verified phone number
+      responses:
+        "200":
+          description: Signed access token + user record
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/family-links/invite:
+    post:
+      summary: Guardian generates a pairing invite code
+      operationId: createFamilyLinkInvite
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: >-
+            Short, human-readable 6-character invite code (server-side TTL,
+            default 15 minutes). Render as QR or read aloud for the elder to type.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invite_code]
+                properties:
+                  invite_code:
+                    type: string
+                    pattern: "^[A-Z0-9]{6}$"
+                    example: "M2K4PC"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/family-links/accept:
+    post:
+      summary: Elder pairs with a guardian by entering an invite code
+      operationId: acceptFamilyLinkInvite
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invite_code]
+              properties:
+                invite_code:
+                  type: string
+      responses:
+        "200":
+          description: Active family link (idempotent — reusing a code returns the same link)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FamilyLink"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/family-links:
+    get:
+      summary: List the caller's family links (as elder or guardian)
+      operationId: listFamilyLinks
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Family links involving the caller, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FamilyLink"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/detection/scan-url:
+    post:
+      summary: Evaluate a URL against cloud reputation (cached)
+      operationId: scanUrl
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+      responses:
+        "200":
+          description: Reputation verdict for the URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/events:
+    post:
+      summary: Elder flags a detected event (call/sms/email metadata only)
+      operationId: flagEvent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlagEventRequest"
+      responses:
+        "200":
+          description: Created flagged event; guardians on active links are alerted
+            (`guardian_notified_at` set)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlaggedEvent"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+    get:
+      summary: List the caller's events (elder → own; guardian → linked elders')
+      operationId: listEvents
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Flagged events, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlaggedEvent"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/events/{id}/action:
+    patch:
+      summary: Elder records what they did about an event
+      operationId: setElderAction
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [elder_action]
+              properties:
+                elder_action:
+                  $ref: "#/components/schemas/ElderAction"
+      responses:
+        "200":
+          description: Updated flagged event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlaggedEvent"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Error:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Role:
+      type: string
+      enum: [elder, guardian]
+
+    FamilyLinkStatus:
+      type: string
+      enum: [pending, active]
+
+    EventType:
+      type: string
+      enum: [call, sms, email]
+
+    ElderAction:
+      type: string
+      enum: [dismissed, blocked, no_action]
+
+    ReputationIdentifierType:
+      type: string
+      enum: [number, url]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        phone_number_hash:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    FamilyLink:
+      type: object
+      properties:
+        id:
+          type: string
+        elder_user_id:
+          type: string
+        guardian_user_id:
+          type: string
+        status:
+          $ref: "#/components/schemas/FamilyLinkStatus"
+        created_at:
+          type: string
+          format: date-time
+        elder_user:
+          $ref: "#/components/schemas/User"
+        guardian_user:
+          $ref: "#/components/schemas/User"
+
+    ScanResult:
+      type: object
+      properties:
+        identifier_hash:
+          type: string
+        identifier_type:
+          $ref: "#/components/schemas/ReputationIdentifierType"
+        score:
+          type: number
+          nullable: true
+          description: 0..100 risk. null means no verdict available (degraded/unknown).
+        source:
+          type: string
+          description: |
+            safe_browsing | safe_browsing_error | no_vendor_configured | not_implemented
+        cached:
+          type: boolean
+
+    FlagEventRequest:
+      type: object
+      required: [event_type, sender_hash]
+      properties:
+        event_type:
+          $ref: "#/components/schemas/EventType"
+        sender_hash:
+          type: string
+          description: Hash of the sender identifier (never the raw number/address)
+        risk_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          nullable: true
+        risk_reasons:
+          type: array
+          items:
+            type: string
+          maxItems: 50
+          description: Short reason tags, e.g. "urgency_language", "payment_request"
+
+    FlaggedEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        elder_user_id:
+          type: string
+        event_type:
+          $ref: "#/components/schemas/EventType"
+        sender_hash:
+          type: string
+        risk_score:
+          type: number
+          nullable: true
+        risk_reasons:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        guardian_notified_at:
+          type: string
+          format: date-time
+          nullable: true
+        elder_action:
+          $ref: "#/components/schemas/ElderAction"
+        elder_user:
+          $ref: "#/components/schemas/User"
+
+    Error:
+      type: object
+      required: [error, code, requestId]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          description: |
+            Machine-readable code. Values: UNAUTHORIZED, INVALID_TOKEN,
+            FORBIDDEN, VALIDATION_ERROR, INVALID_INVITE_CODE, NOT_FOUND,
+            AUTH_DEV_DISABLED, RATE_LIMITED, INTERNAL_ERROR.
+        requestId:
+          type: string
+          description: Correlation id, echoed as the X-Request-Id response header.
