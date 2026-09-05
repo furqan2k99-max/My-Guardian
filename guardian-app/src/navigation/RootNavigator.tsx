@@ -15,7 +15,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 function Splash() {
   return (
     <View style={styles.splash}>
-      <ActivityIndicator size="large" color={colors.primary} />
+      <ActivityIndicator size="large" color={colors.accent} />
     </View>
   );
 }

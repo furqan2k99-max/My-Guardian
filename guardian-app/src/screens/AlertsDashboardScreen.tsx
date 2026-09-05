@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -8,6 +8,8 @@ import {
   Text,
   View,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { Platform } from 'react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { ApiRequestError, FlaggedEvent, listEvents, listFamilyLinks } from '../api';
@@ -15,16 +17,15 @@ import { useAuth } from '../auth/AuthContext';
 import { EventCard } from '../components/EventCard';
 import { Screen } from '../components/Screen';
 import { observeAlertNotificationTaps, registerWithBackend } from '../push/notifications';
-import { colors, radii, spacing } from '../theme';
+import { colors, radii, shadows, spacing, type } from '../theme';
 
 const POLL_INTERVAL_MS = 30_000;
 
 /**
- * Guardian alerts dashboard (post-pairing landing screen). Shows the flagged
- * events feed for every elder the guardian has an active link with, newest
- * first, plus which elders are linked. Polls every 30s and supports
- * pull-to-refresh. Tapping a card â€” or its push notification â€” opens the
- * event's detail screen.
+ * Guardian alerts dashboard (post-pairing landing screen). Glass cards for
+ * each flagged event sit on a soft indigo/blue gradient. Polls every 30s and
+ * supports pull-to-refresh. Tapping a card or its push notification opens
+ * the event's detail screen.
  */
 export function AlertsDashboardScreen() {
   const { token, signOut } = useAuth();
@@ -87,24 +88,62 @@ export function AlertsDashboardScreen() {
         void refresh(true);
       }
     });
-    // refresh is stable enough per token; re-subscribing on every refresh
-    // identity would churn listeners.
-  }, [navigation, token]);
+  }, [navigation, token, refresh]);
+
+  const highCount = events.filter((e) => (e.risk_score ?? 0) >= 75).length;
+  const todayCount = events.filter((e) => isToday(e.created_at)).length;
 
   return (
     <Screen>
       <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Guardian alerts</Text>
-          <Text style={styles.subtitle}>
-            {linkedElders === 1
-              ? '1 linked elder'
-              : `${linkedElders} linked elders`}
-          </Text>
+        <View>
+          <Text style={styles.kicker}>MYGUARDIAN</Text>
+          <Text style={styles.title}>Alerts</Text>
         </View>
-        <Pressable accessibilityRole="button" onPress={signOut} hitSlop={8}>
-          <Text style={styles.signOut}>Sign out</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={signOut}
+          hitSlop={8}
+          style={({ pressed }) => [styles.signOutBtn, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={styles.signOutText}>Sign out</Text>
         </Pressable>
+      </View>
+
+      <View style={styles.statsRow}>
+        <View style={[styles.statCard, shadows.card]}>
+          <BlurView
+            intensity={40}
+            tint="light"
+            style={StyleSheet.absoluteFill}
+            blurMethod={Platform.OS === 'android' ? 'dimezisBlurViewSdk31Plus' : undefined}
+          />
+          <View style={styles.statTint} />
+          <Text style={styles.statValue}>{linkedElders}</Text>
+          <Text style={styles.statLabel}>Linked elders</Text>
+        </View>
+        <View style={[styles.statCard, shadows.card]}>
+          <BlurView
+            intensity={40}
+            tint="light"
+            style={StyleSheet.absoluteFill}
+            blurMethod={Platform.OS === 'android' ? 'dimezisBlurViewSdk31Plus' : undefined}
+          />
+          <View style={styles.statTint} />
+          <Text style={[styles.statValue, { color: colors.high }]}>{highCount}</Text>
+          <Text style={styles.statLabel}>High risk</Text>
+        </View>
+        <View style={[styles.statCard, shadows.card]}>
+          <BlurView
+            intensity={40}
+            tint="light"
+            style={StyleSheet.absoluteFill}
+            blurMethod={Platform.OS === 'android' ? 'dimezisBlurViewSdk31Plus' : undefined}
+          />
+          <View style={styles.statTint} />
+          <Text style={styles.statValue}>{todayCount}</Text>
+          <Text style={styles.statLabel}>Today</Text>
+        </View>
       </View>
 
       {error && (
@@ -116,13 +155,16 @@ export function AlertsDashboardScreen() {
         </View>
       )}
 
-      {/* Experimental capability demo â€” deliberately labeled, not core flow. */}
       <Pressable
         accessibilityRole="button"
-        style={styles.demoRow}
         onPress={() => navigation.navigate('VoiceScamChecker')}
+        style={({ pressed }) => [styles.demoCard, pressed && { transform: [{ scale: 0.99 }] }]}
       >
-        <View style={styles.demoTextWrap}>
+        <View style={[styles.demoIcon, { backgroundColor: colors.accent }]}>
+          <View style={styles.demoMic} />
+          <View style={styles.demoMicBase} />
+        </View>
+        <View style={{ flex: 1 }}>
           <View style={styles.demoTitleRow}>
             <Text style={styles.demoTitle}>Voice Scam Checker</Text>
             <View style={styles.demoBadge}>
@@ -130,18 +172,28 @@ export function AlertsDashboardScreen() {
             </View>
           </View>
           <Text style={styles.demoSubtitle}>
-            Record a sample conversation and see the analysis engine rate it.
+            Record a sample and see the engine rate it in real time
           </Text>
         </View>
+        <Text style={styles.demoChevron}>�</Text>
       </Pressable>
+
+      <View style={styles.feedHeader}>
+        <Text style={styles.feedTitle}>Recent activity</Text>
+        <Text style={styles.feedCount}>{events.length} total</Text>
+      </View>
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.accent} />
         </View>
       ) : events.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.emptyTitle}>No alerts yet</Text>
+        <View style={styles.empty}>
+          <View style={styles.emptyIcon}>
+            <View style={styles.emptyBell} />
+            <View style={styles.emptyDot} />
+          </View>
+          <Text style={styles.emptyTitle}>All clear</Text>
           <Text style={styles.emptyBody}>
             When your elder reports a suspicious call, or a link they check
             turns out dangerous, it will show up here.
@@ -155,6 +207,7 @@ export function AlertsDashboardScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={() => navigation.navigate('EventDetail', { eventId: item.id })}
+              style={({ pressed }) => [pressed && { transform: [{ scale: 0.995 }] }]}
             >
               <EventCard event={item} />
             </Pressable>
@@ -162,7 +215,11 @@ export function AlertsDashboardScreen() {
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void refresh()}
+              tintColor={colors.accent}
+            />
           }
         />
       )}
@@ -170,112 +227,208 @@ export function AlertsDashboardScreen() {
   );
 }
 
+function isToday(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
-  headerText: {
-    flexShrink: 1,
+  kicker: {
+    ...type.micro,
+    color: colors.accent,
+    marginBottom: 4,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
+    ...type.display,
     color: colors.text,
   },
-  subtitle: {
-    fontSize: 14,
+  signOutBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+  },
+  signOutText: {
+    ...type.caption,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: radii.lg,
+    overflow: 'hidden',
+    padding: spacing.md,
+    alignItems: 'flex-start',
+    minHeight: 72,
+    justifyContent: 'center',
+  },
+  statTint: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  statValue: {
+    ...type.title,
+    fontSize: 26,
+    color: colors.text,
+  },
+  statLabel: {
+    ...type.caption,
     color: colors.textMuted,
     marginTop: 2,
-  },
-  signOut: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.danger,
   },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    backgroundColor: '#fee2e2',
-    borderRadius: 12,
+    backgroundColor: colors.highSoft,
+    borderRadius: radii.lg,
     padding: spacing.md,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
   },
-  errorText: {
-    flexShrink: 1,
-    fontSize: 13,
-    color: colors.danger,
-  },
-  retry: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.danger,
-  },
-  demoRow: {
+  errorText: { flexShrink: 1, ...type.caption, color: colors.high, fontWeight: '600' },
+  retry: { ...type.caption, color: colors.high, fontWeight: '700' },
+
+  demoCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderRadius: radii.xl,
     padding: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
-  demoTextWrap: {
-    flexShrink: 1,
-    gap: 2,
+  demoIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  demoMic: {
+    width: 8,
+    height: 14,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+  },
+  demoMicBase: {
+    position: 'absolute',
+    bottom: 9,
+    width: 14,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: '#fff',
   },
   demoTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 6,
   },
   demoTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...type.bodyStrong,
+    fontSize: 16,
     color: colors.text,
   },
   demoBadge: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 999,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    backgroundColor: colors.accentSoft,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radii.pill,
   },
   demoBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textMuted,
+    ...type.micro,
+    color: colors.accentInk,
   },
   demoSubtitle: {
-    fontSize: 12,
+    ...type.caption,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  demoChevron: {
+    fontSize: 24,
+    color: colors.textMuted,
+    lineHeight: 24,
+  },
+
+  feedHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  feedTitle: {
+    ...type.subtitle,
+    color: colors.text,
+  },
+  feedCount: {
+    ...type.caption,
     color: colors.textMuted,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    paddingBottom: spacing.xl,
+  },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+  },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.accentSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  emptyBell: {
+    width: 16,
+    height: 22,
+    borderRadius: 8,
+    backgroundColor: colors.accent,
+  },
+  emptyDot: {
+    position: 'absolute',
+    top: 18,
+    right: 16,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...type.subtitle,
     color: colors.text,
   },
   emptyBody: {
-    fontSize: 14,
+    ...type.body,
     color: colors.textMuted,
     textAlign: 'center',
-    maxWidth: 280,
   },
   listContent: {
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   separator: {
-    height: spacing.sm,
+    height: spacing.md,
   },
 });

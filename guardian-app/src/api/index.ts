@@ -12,6 +12,7 @@ export type {
   FamilyLink,
   FamilyLinkStatus,
   FlaggedEvent,
+  GuardianAction,
   InviteResponse,
   Role,
   User,

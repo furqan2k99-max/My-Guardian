@@ -1,12 +1,24 @@
 package com.myguardian.elder.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -14,15 +26,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.myguardian.elder.data.ApiClient
 import com.myguardian.elder.data.ApiError
 import com.myguardian.elder.data.EmailAuthHelper
 import com.myguardian.elder.data.TokenStore
+import com.myguardian.elder.theme.Accent
+import com.myguardian.elder.theme.ErrorRed
 import com.myguardian.elder.ui.BigButton
 import com.myguardian.elder.ui.ElderScreen
 import kotlinx.coroutines.Dispatchers
@@ -135,93 +154,162 @@ fun PairScreen(store: TokenStore, onPaired: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
 
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
-            label = { Text("1. Your email") },
-            singleLine = true,
-            enabled = !busy && firebaseToken == null,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                capitalization = KeyboardCapitalization.None,
-            ),
-            textStyle = MaterialTheme.typography.bodyLarge,
-        )
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
-            label = { Text("Your password") },
-            singleLine = true,
-            enabled = !busy && firebaseToken == null,
-            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            textStyle = MaterialTheme.typography.bodyLarge,
-        )
-        if (firebaseToken == null) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "New here? Just pick a password you'll remember — we'll create " +
-                    "your account automatically.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
+        // Step 1: account
+        StepCard(
+            stepNumber = 1,
+            title = "Your email",
+            done = firebaseToken != null,
+        ) {
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+                label = { Text("Email address") },
+                singleLine = true,
+                enabled = !busy && firebaseToken == null,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    capitalization = KeyboardCapitalization.None,
+                ),
+                textStyle = MaterialTheme.typography.bodyLarge,
             )
             Spacer(Modifier.height(12.dp))
-            BigButton(
-                text = "Continue",
-                onClick = signIn,
-                enabled = !busy && email.isNotBlank() && password.isNotBlank(),
-                loading = busy && firebaseToken == null,
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+                label = { Text("Password") },
+                singleLine = true,
+                enabled = !busy && firebaseToken == null,
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                textStyle = MaterialTheme.typography.bodyLarge,
             )
+            if (firebaseToken == null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "New here? Pick any password you'll remember — we'll create " +
+                        "your account automatically.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(12.dp))
+                BigButton(
+                    text = "Continue",
+                    onClick = signIn,
+                    enabled = !busy && email.isNotBlank() && password.isNotBlank(),
+                    loading = busy && firebaseToken == null,
+                )
+            }
         }
 
         if (firebaseToken != null) {
-            Spacer(Modifier.height(20.dp))
-            OutlinedTextField(
-                value = code,
-                onValueChange = { code = it.filter { c -> c.isLetterOrDigit() }.uppercase() },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
-                label = { Text("2. Your guardian's invite code") },
-                singleLine = true,
-                enabled = !busy,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Ascii,
-                    capitalization = KeyboardCapitalization.None,
-                ),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                ),
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "It's a short 6-character code and only works for 15 minutes — " +
-                    "ask your guardian for a fresh one if it's too old.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(12.dp))
-            BigButton(
-                text = "Connect",
-                onClick = connect,
-                enabled = !busy && code.isNotBlank(),
-                loading = busy && code.isNotBlank(),
-            )
+            Spacer(Modifier.height(16.dp))
+            // Step 2: invite code
+            StepCard(
+                stepNumber = 2,
+                title = "Guardian's invite code",
+                done = false,
+            ) {
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it.filter { c -> c.isLetterOrDigit() }.uppercase() },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+                    label = { Text("6-character code") },
+                    singleLine = true,
+                    enabled = !busy,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Ascii,
+                        capitalization = KeyboardCapitalization.None,
+                    ),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    ),
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Codes are short and only work for 15 minutes — ask your " +
+                        "guardian for a fresh one if it's too old.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(12.dp))
+                BigButton(
+                    text = "Connect",
+                    onClick = connect,
+                    enabled = !busy && code.isNotBlank(),
+                    loading = busy && code.isNotBlank(),
+                )
+            }
         }
 
         error?.let { message ->
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
+            ErrorBanner(message)
+        }
+    }
+}
+
+@Composable
+private fun StepCard(
+    stepNumber: Int,
+    title: String,
+    done: Boolean,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(if (done) Accent else Accent.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        if (done) "✓" else stepNumber.toString(),
+                        color = if (done) Color.White else Accent,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+private fun ErrorBanner(message: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFFFEE2E2),
+        border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+    ) {
+        Box(Modifier.padding(16.dp)) {
             Text(
                 message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
+                color = ErrorRed,
+                fontWeight = FontWeight.SemiBold,
             )
         }
     }
