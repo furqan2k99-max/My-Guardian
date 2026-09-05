@@ -52,7 +52,7 @@ describe('Detection', () => {
   });
 
   describe('POST /api/v1/detection/scan-url', () => {
-    it('returns a deterministically hashed identifier with a degraded verdict when no vendor is configured', async () => {
+    it('returns a heuristic verdict (not null) when no external vendor is configured', async () => {
       const elder = await devLogin(app, 'elder');
       const res = await request(app)
         .post('/api/v1/detection/scan-url')
@@ -62,9 +62,37 @@ describe('Detection', () => {
       expect(res.status).toBe(200);
       expect(res.body.identifier_hash).toMatch(/^[a-f0-9]{64}$/);
       expect(res.body.identifier_type).toBe('url');
-      expect(res.body.score).toBeNull();
-      expect(res.body.source).toBe('no_vendor_configured');
+      // With local heuristics enabled, we always return a numeric score,
+      // never null. example.com is not in the allowlist and the path
+      // contains "suspicious" — score will be ≥ 30.
+      expect(typeof res.body.score).toBe('number');
+      expect(res.body.score).toBeGreaterThanOrEqual(30);
+      expect(res.body.source).toMatch(/^heuristic_/);
       expect(res.body.cached).toBe(false);
+    });
+
+    it('returns a low score for allowlisted domains even without a vendor', async () => {
+      const elder = await devLogin(app, 'elder');
+      const res = await request(app)
+        .post('/api/v1/detection/scan-url')
+        .set('Authorization', `Bearer ${elder.token}`)
+        .send({ url: 'https://google.com/search' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.score).toBeLessThanOrEqual(10);
+      expect(res.body.source).toMatch(/^heuristic_allowlist/);
+    });
+
+    it('flags clearly malicious URLs (denylist) without a vendor', async () => {
+      const elder = await devLogin(app, 'elder');
+      const res = await request(app)
+        .post('/api/v1/detection/scan-url')
+        .set('Authorization', `Bearer ${elder.token}`)
+        .send({ url: 'https://paypa1-secure.com/login' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.score).toBeGreaterThanOrEqual(70);
+      expect(res.body.source).toBe('heuristic_denylist');
     });
 
     it('serves repeated scans from the cache', async () => {

@@ -31,12 +31,19 @@ import kotlinx.coroutines.withContext
 
 /**
  * Link checker. The elder shares or pastes a link they're unsure about; the
- * backend checks its reputation and the verdict is shown in plain language.
- * A clearly dangerous result is shared with the guardian automatically (the
- * elder's deliberate check IS the intent to involve them); unknown/safe
- * results stay on the device.
+ * backend runs local heuristics + (if configured) Google Safe Browsing and
+ * the verdict is shown in plain language.
+ *
+ * Behaviour:
+ *   - score 0–29 ("Safe")            — known legitimate site. No flag.
+ *   - score 30–69 ("Be careful")    — heuristic flags or unknown domain.
+ *                                     Auto-shared with the guardian because
+ *                                     the elder's deliberate check IS the
+ *                                     intent to involve them.
+ *   - score ≥ 70 ("Dangerous")      — confirmed malicious. Auto-flagged.
  */
-private const val DANGEROUS_SCORE = 75.0
+private const val DANGEROUS_SCORE = 70.0
+private const val FLAG_THRESHOLD = 30.0
 
 @Composable
 fun CheckLinkScreen(store: TokenStore, initialUrl: String?) {
@@ -61,8 +68,11 @@ fun CheckLinkScreen(store: TokenStore, initialUrl: String?) {
                     var didFlag = false
                     val result = com.myguardian.elder.data.SessionRefresher.withFreshSession(store) { token ->
                         val r = ApiClient.scanUrl(token, trimmed)
-                        if ((r.score ?: 0.0) >= DANGEROUS_SCORE) {
-                            ApiClient.postLinkFlag(token, r.identifierHash, r.score!!)
+                        // Auto-share with the guardian for anything that's not
+                        // a clean "safe" verdict — the elder chose to ask, so
+                        // we err on the side of keeping the guardian in the loop.
+                        if (r.score != null && r.score >= FLAG_THRESHOLD) {
+                            ApiClient.postLinkFlag(token, r.identifierHash, r.score)
                             didFlag = true
                         }
                         r
@@ -153,16 +163,22 @@ fun CheckLinkScreen(store: TokenStore, initialUrl: String?) {
                     },
                     MaterialTheme.colorScheme.error,
                 )
-                score!! >= 50.0 -> Triple(
-                    "Be careful with this link",
-                    "It looks suspicious. Don't enter personal details unless " +
-                        "you're sure it's genuine.",
+                score!! >= FLAG_THRESHOLD -> Triple(
+                    "This link is unfamiliar",
+                    if (flagged) {
+                        "We don't recognize this site, so we've let your " +
+                            "guardian know you were checking it. Be careful " +
+                            "before entering any personal details."
+                    } else {
+                        "We don't recognize this site. Be careful before " +
+                            "entering any personal details."
+                    },
                     MaterialTheme.colorScheme.tertiary,
                 )
                 else -> Triple(
-                    "This link looks safe so far",
-                    "No problems were found — but stay alert if it asks for " +
-                        "money or passwords.",
+                    "This link looks familiar and safe",
+                    "It's a well-known site. Stay alert if it asks for " +
+                        "money or passwords, but no need to worry.",
                     MaterialTheme.colorScheme.primary,
                 )
             }

@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import { prisma } from '../db/prisma';
 import { hashIdentifier } from '../lib/hash';
 import { checkUrlThreat, ReputationVerdict } from '../providers/safeBrowsing';
+import { checkUrlHeuristics } from '../providers/urlHeuristics';
 
 export interface ScanResult {
   identifier_hash: string;
@@ -34,7 +35,40 @@ export async function scanUrl(url: string): Promise<ScanResult> {
     };
   }
 
+  // 1. Local heuristics first — works offline, gives a verdict for every URL.
+  const local = await checkUrlHeuristics(url);
+
+  // If the local heuristics are confident, accept them and skip the vendor.
+  // "Confident" = an explicit allowlist/denylist match, OR any heuristic
+  // flag fired, OR a clean allowlist suffix. The only case we don't trust
+  // local alone is `heuristic_unknown_domain` — there we let the vendor
+  // speak if it's configured.
+  const localIsConfident =
+    local.source === 'heuristic_allowlist' ||
+    local.source === 'heuristic_allowlist_suffix' ||
+    local.source === 'heuristic_denylist' ||
+    local.source === 'heuristic_invalid_url' ||
+    local.source === 'heuristic_combined';
+
+  if (localIsConfident) {
+    return await cacheAndReturn(identifier_hash, local);
+  }
+
+  // 2. Unknown-but-unremarkable domain — try the external vendor if any.
   const verdict = await checkUrlThreat(url);
+  if (verdict.score !== null) {
+    return await cacheAndReturn(identifier_hash, verdict);
+  }
+
+  // 3. No vendor configured AND no local flags — flag as suspicious
+  // (unknown + the elder explicitly asked to check it).
+  return await cacheAndReturn(identifier_hash, local);
+}
+
+async function cacheAndReturn(
+  identifier_hash: string,
+  verdict: ReputationVerdict,
+): Promise<ScanResult> {
   const next: ScanResult = {
     identifier_hash,
     identifier_type: ReputationIdentifierType.url,
@@ -42,7 +76,6 @@ export async function scanUrl(url: string): Promise<ScanResult> {
     source: verdict.source,
     cached: false,
   };
-
   await prisma.reputationCache.upsert({
     where: { identifier_hash },
     create: {
@@ -59,7 +92,6 @@ export async function scanUrl(url: string): Promise<ScanResult> {
       ttl: env.REPUTATION_TTL_SECONDS,
     },
   });
-
   return next;
 }
 

@@ -127,9 +127,13 @@ export function EmailAuthScreen() {
             </Text>
           </Pressable>
 
-          {__DEV__ ? (
-            <Pressable onPress={() => navigation.navigate('DevLogin')} hitSlop={8}>
-              <Text style={styles.devLink}>Dev sign-in</Text>
+          {true ? (
+            <Pressable
+              onPress={() => navigation.navigate('DevLogin')}
+              hitSlop={8}
+              style={({ pressed }) => [styles.devLinkPill, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={styles.devLink}>Dev sign-in · bypass Firebase</Text>
             </Pressable>
           ) : null}
 
@@ -219,7 +223,17 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     textDecorationLine: 'underline',
-    marginTop: spacing.md,
+    fontWeight: '600',
+  },
+  devLinkPill: {
+    alignSelf: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginTop: spacing.sm,
   },
   caption: {
     ...type.caption,
